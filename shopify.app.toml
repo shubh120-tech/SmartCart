@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "c1d8a6be15bb65fe4985ced6b0e2660a"
-application_url = "https://example.com"
+application_url = "https://smartcart-production-fc5d.up.railway.app"
 embedded = true
 name = "SmartCart"
 
@@ -46,7 +46,7 @@ api_version = "2026-07"
 
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://smartcart-production-fc5d.up.railway.app/api/auth" ]
 
 [build]
 include_config_on_deploy = true
