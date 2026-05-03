@@ -1,0 +1,202 @@
+// prisma/schema.prisma
+// SmartCart Pro — Production Schema (PostgreSQL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ── Switch comment to toggle between dev and prod ─────────────────────────────
+
+// DEV (SQLite)
+// datasource db {
+//   provider = "sqlite"
+//   url      = "file:dev.sqlite"
+// }
+
+// PROD (PostgreSQL — Railway)
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHOPIFY REQUIRED — do not remove or rename
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Session {
+  id                   String    @id
+  shop                 String
+  state                String
+  isOnline             Boolean   @default(false)
+  scope                String?
+  expires              DateTime?
+  accessToken          String
+  userId               BigInt?
+  firstName            String?
+  lastName             String?
+  email                String?
+  accountOwner         Boolean   @default(false)
+  locale               String?
+  collaborator         Boolean?  @default(false)
+  emailVerified        Boolean?  @default(false)
+  refreshToken         String?
+  refreshTokenExpires  DateTime?
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COD MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CodSettings {
+  id                           Int      @id @default(autoincrement())
+  shop                         String   @unique
+  enabled                      Boolean  @default(true)
+  minOrderValue                Float    @default(0)
+  maxOrderValue                Float    @default(10000)
+  extraFee                     Float    @default(0)
+  extraFeeType                 String   @default("flat")
+  blockedPincodes              String   @default("")
+  blockedStates                String   @default("")
+  requireOtp                   Boolean  @default(false)
+  autoVerifyReturningCustomers Boolean  @default(true)
+  rtoProtection                Boolean  @default(true)
+  rtoRiskThreshold             String   @default("medium")
+  prepaidDiscount              Float    @default(0)
+  prepaidDiscountType          String   @default("flat")
+  partialCodEnabled            Boolean  @default(false)
+  partialCodMinPrepaid         Float    @default(20)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@map("cod_settings")
+}
+
+model RtoStats {
+  id                  Int      @id @default(autoincrement())
+  shop                String   @unique
+  totalOrders         Int      @default(0)
+  codOrders           Int      @default(0)
+  rtoCount            Int      @default(0)
+  rtoRate             Float    @default(0)
+  savedByVerification Int      @default(0)
+  prepaidConversions  Int      @default(0)
+  updatedAt           DateTime @updatedAt
+
+  @@map("rto_stats")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORDER TRACKING
+// ─────────────────────────────────────────────────────────────────────────────
+
+model TrackingSettings {
+  id                    Int      @id @default(autoincrement())
+  shop                  String   @unique
+  brandedPageEnabled    Boolean  @default(true)
+  customDomain          String   @default("")
+  logoUrl               String   @default("")
+  primaryColor          String   @default("#5C6AC4")
+  accentColor           String   @default("#47C1BF")
+  showEstimatedDelivery Boolean  @default(true)
+  showOrderItems        Boolean  @default(true)
+  showCarrierInfo       Boolean  @default(true)
+  notificationsEnabled  Boolean  @default(true)
+  notifyEmail           Boolean  @default(true)
+  notifyWhatsapp        Boolean  @default(false)
+  notifySms             Boolean  @default(false)
+  whatsappNumber        String   @default("")
+  emailTemplate         String   @default("default")
+  ndrsEnabled           Boolean  @default(true)
+  ndrAutoReattempt      Boolean  @default(true)
+  ndrMaxAttempts        Int      @default(3)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("tracking_settings")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMART CART SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SmartCartSettings {
+  id                         Int      @id @default(autoincrement())
+  shop                       String   @unique
+  freeShippingEnabled        Boolean  @default(true)
+  freeShippingThreshold      Float    @default(499)
+  freeShippingMessage        String   @default("Add {amount} more for FREE shipping 🚚")
+  freeShippingSuccessMessage String   @default("🎉 You've unlocked FREE shipping!")
+  milestonesEnabled          Boolean  @default(true)
+  milestones                 String   @default("[]")
+  upsellEnabled              Boolean  @default(false)
+  upsellProductVariantId     String   @default("")
+  upsellProductTitle         String   @default("")
+  upsellProductPrice         Float    @default(0)
+  upsellProductImage         String   @default("")
+  upsellTitle                String   @default("Complete your order")
+  upsellBadgeText            String   @default("Frequently bought together")
+  prepaidNudgeEnabled        Boolean  @default(true)
+  prepaidDiscount            Float    @default(50)
+  prepaidDiscountType        String   @default("flat")
+  trustBadgesEnabled         Boolean  @default(true)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@map("smart_cart_settings")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHIPPING SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ShippingSettings {
+  id                Int      @id @default(autoincrement())
+  shop              String   @unique
+  defaultWeight     Int      @default(500)
+  autoSelectCourier Boolean  @default(true)
+  showRatesInCart   Boolean  @default(true)
+  codExtraCharge    Float    @default(30)
+  couriers          String   @default("[]")
+  zones             String   @default("[]")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("shipping_settings")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APP SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AppSettings {
+  id          Int      @id @default(autoincrement())
+  shop        String   @unique
+  storeName   String   @default("")
+  currency    String   @default("INR")
+  timezone    String   @default("Asia/Kolkata")
+  plan        String   @default("free")
+  isActive    Boolean  @default(true)
+  installedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANALYTICS EVENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AnalyticsEvent {
+  id        Int      @id @default(autoincrement())
+  shop      String
+  event     String
+  orderId   String?
+  value     Float?
+  metadata  String   @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([shop])
+  @@index([shop, event])
+  @@index([createdAt])
+  @@map("analytics_events")
+}

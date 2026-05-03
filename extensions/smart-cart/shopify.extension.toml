@@ -1,0 +1,86 @@
+# extensions/smart-cart-widget/shopify.extension.toml
+# https://shopify.dev/docs/api/checkout-ui-extensions/latest/configuration
+
+api_version = "2026-04"
+
+[[extensions]]
+name = "smart-cart"
+handle = "smart-cart"
+type = "ui_extension"
+uid = "b7b1958f-198b-c735-9d7c-124e7828c25ac2770a5b"
+
+[[extensions.targeting]]
+module = "./src/Checkout.jsx"
+target = "purchase.checkout.block.render"
+
+[extensions.capabilities]
+api_access = true
+
+[[extensions.metafields]]
+namespace = "$app"
+key = "requestedFreeGift"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SETTINGS — configurable by merchant from Shopify admin
+# ─────────────────────────────────────────────────────────────────────────────
+[extensions.settings]
+
+[[extensions.settings.fields]]
+key = "freeShippingEnabled"
+type = "boolean"
+name = "Enable free shipping bar"
+description = "Show a progress bar toward free shipping threshold"
+
+[[extensions.settings.fields]]
+key = "freeShippingThreshold"
+type = "number_decimal"
+name = "Free shipping threshold"
+description = "Cart value needed to unlock free shipping (e.g. 499)"
+
+[[extensions.settings.fields]]
+key = "freeShippingMessage"
+type = "single_line_text_field"
+name = "Free shipping message"
+description = "Use {amount} as placeholder. e.g. Add {amount} more for FREE shipping 🚚"
+
+[[extensions.settings.fields]]
+key = "freeShippingSuccessMessage"
+type = "single_line_text_field"
+name = "Free shipping success message"
+description = "Shown when customer has unlocked free shipping"
+
+[[extensions.settings.fields]]
+key = "milestonesEnabled"
+type = "boolean"
+name = "Enable milestone rewards"
+description = "Show reward unlocks as customer adds items to cart"
+
+[[extensions.settings.fields]]
+key = "milestones"
+type = "single_line_text_field"
+name = "Milestones (JSON)"
+description = "JSON array: [{\"threshold\":500,\"reward\":\"Free Gift\",\"description\":\"Mystery gift\"}]"
+
+[[extensions.settings.fields]]
+key = "prepaidNudgeEnabled"
+type = "boolean"
+name = "Enable prepaid nudge"
+description = "Show a banner encouraging customers to switch from COD to prepaid"
+
+[[extensions.settings.fields]]
+key = "prepaidDiscount"
+type = "number_decimal"
+name = "Prepaid discount amount"
+description = "Discount offered for switching to prepaid (e.g. 50)"
+
+[[extensions.settings.fields]]
+key = "prepaidDiscountType"
+type = "single_line_text_field"
+name = "Prepaid discount type"
+description = "flat or percent"
+
+[[extensions.settings.fields]]
+key = "trustBadgesEnabled"
+type = "boolean"
+name = "Enable trust badges"
+description = "Show secure checkout, easy returns, and rating badges"
