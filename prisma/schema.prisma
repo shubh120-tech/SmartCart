@@ -16,7 +16,7 @@ generator client {
 // PROD (PostgreSQL — Railway)
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url = env("DATABASE_URL")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

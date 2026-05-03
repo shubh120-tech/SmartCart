@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
@@ -38,17 +38,14 @@ export const loader = async ({ request }) => {
   let rtoStats = DEFAULT_RTO_STATS;
 
   try {
-    const row = await db.codSettings.findUnique({ where: { shop: session.shop } });
+    const [row, stats] = await Promise.all([
+      db.codSettings.findUnique({ where: { shop: session.shop } }),
+      db.rtoStats.findUnique({ where: { shop: session.shop } }),
+    ]);
     if (row) settings = row;
-  } catch (e) {
-    console.warn("CodSettings table not found. Run: npx prisma migrate dev --name add-smartcart-models");
-  }
-
-  try {
-    const stats = await db.rtoStats.findUnique({ where: { shop: session.shop } });
     if (stats) rtoStats = stats;
   } catch (e) {
-    console.warn("RtoStats table not found. Run: npx prisma migrate dev --name add-smartcart-models");
+    console.warn("DB tables not found. Run: npx prisma migrate deploy");
   }
 
   return { settings, rtoStats };
@@ -93,6 +90,7 @@ export const action = async ({ request }) => {
 };
 
 export default function CodManagement() {
+  const { settings: loaderSettings, rtoStats } = useLoaderData();
   const fetcher = useFetcher();
   const isSaving = fetcher.state === "submitting";
 
@@ -119,8 +117,6 @@ export default function CodManagement() {
   const [partialCodEnabled, setPartialCodEnabled] = useState(false);
   const [partialCodMinPrepaid, setPartialCodMinPrepaid] = useState(20);
 
-  // Simulated RTO stats strip
-  const rtoStats = { codOrders: 480, rtoCount: 62, rtoRate: 12.9, prepaidConversions: 34 };
   const rtoRateColor = rtoStats.rtoRate < 10 ? "#008060" : rtoStats.rtoRate < 20 ? "#b5731d" : "#d72c0d";
 
   const handleSave = () => {

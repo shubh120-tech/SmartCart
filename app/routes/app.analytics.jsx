@@ -1,25 +1,32 @@
-import { useState } from "react";
 import { useLoaderData, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import db from "../db.server";
 
 export const loader = async ({ request }) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
   const url = new URL(request.url);
   const range = url.searchParams.get("range") ?? "30d";
 
+  // Calculate date range
+  const now = new Date();
+  const daysMap = { "1d": 1, "7d": 7, "30d": 30, "90d": 90 };
+  const days = daysMap[range] ?? 30;
+  const since = new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
+
+  // ── Fetch orders from Shopify GraphQL ──────────────────────────────────────
   let orders = [];
   try {
     const res = await admin.graphql(`
-      query getOrderAnalytics {
-        orders(first: 250, sortKey: CREATED_AT, reverse: true) {
+      query getOrderAnalytics($query: String!) {
+        orders(first: 250, sortKey: CREATED_AT, reverse: true, query: $query) {
           edges {
             node {
               id
               name
               createdAt
-              totalPriceSet { shopMoney { amount } }
+              totalPriceSet { shopMoney { amount currencyCode } }
               paymentGatewayNames
               displayFulfillmentStatus
               cancelReason
@@ -36,7 +43,8 @@ export const loader = async ({ request }) => {
           }
         }
       }
-    `);
+    `, { variables: { query: `created_at:>='${since}'` } });
+
     const data = await res.json();
     orders = data?.data?.orders?.edges?.map(e => e.node) ?? [];
   } catch (e) {
@@ -55,6 +63,7 @@ export const loader = async ({ request }) => {
   const codRevenue = codOrders.reduce((s, o) => s + parseFloat(o.totalPriceSet?.shopMoney?.amount ?? 0), 0);
   const prepaidRevenue = prepaidOrders.reduce((s, o) => s + parseFloat(o.totalPriceSet?.shopMoney?.amount ?? 0), 0);
 
+  // ── Top products ───────────────────────────────────────────────────────────
   const productMap = {};
   orders.forEach(o => {
     o.lineItems?.edges?.forEach(({ node: item }) => {
@@ -65,16 +74,57 @@ export const loader = async ({ request }) => {
   });
   const topProducts = Object.values(productMap).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
 
-  // 7-day trend — simulated; replace with real date-bucketed query in production
-  const revenueTrend = [
-    { day: "Mon", cod: 5200, prepaid: 7200 },
-    { day: "Tue", cod: 6100, prepaid: 9700 },
-    { day: "Wed", cod: 4800, prepaid: 4400 },
-    { day: "Thu", cod: 7200, prepaid: 11100 },
-    { day: "Fri", cod: 8900, prepaid: 13200 },
-    { day: "Sat", cod: 11200, prepaid: 17200 },
-    { day: "Sun", cod: 8400, prepaid: 11200 },
-  ];
+  // ── Real 7-day revenue trend from orders ───────────────────────────────────
+  const trendDays = 7;
+  const trendMap = {};
+  for (let i = trendDays - 1; i >= 0; i--) {
+    const d = new Date(now - i * 24 * 60 * 60 * 1000);
+    const key = d.toLocaleDateString("en-IN", { weekday: "short" });
+    trendMap[key] = { day: key, cod: 0, prepaid: 0 };
+  }
+  orders.forEach(o => {
+    const d = new Date(o.createdAt);
+    const key = d.toLocaleDateString("en-IN", { weekday: "short" });
+    if (trendMap[key]) {
+      const amount = parseFloat(o.totalPriceSet?.shopMoney?.amount ?? 0);
+      if (isCod(o)) trendMap[key].cod += amount;
+      else trendMap[key].prepaid += amount;
+    }
+  });
+  const revenueTrend = Object.values(trendMap);
+
+  // ── SmartCart feature stats from AnalyticsEvents ───────────────────────────
+  let featureStats = {
+    freeshippingBarConversions: 0,
+    upsellConversions: 0,
+    milestoneRewardsRedeemed: 0,
+    prepaidIncentiveConversions: 0,
+  };
+  try {
+    const [freeShipping, upsell, milestone, prepaidConversion] = await Promise.all([
+      db.analyticsEvent.count({ where: { shop: session.shop, event: "free_shipping_bar_conversion", createdAt: { gte: new Date(since) } } }),
+      db.analyticsEvent.count({ where: { shop: session.shop, event: "upsell_accepted", createdAt: { gte: new Date(since) } } }),
+      db.analyticsEvent.count({ where: { shop: session.shop, event: "milestone_unlocked", createdAt: { gte: new Date(since) } } }),
+      db.analyticsEvent.count({ where: { shop: session.shop, event: "prepaid_conversion", createdAt: { gte: new Date(since) } } }),
+    ]);
+    featureStats = {
+      freeshippingBarConversions: freeShipping,
+      upsellConversions: upsell,
+      milestoneRewardsRedeemed: milestone,
+      prepaidIncentiveConversions: prepaidConversion,
+    };
+  } catch (e) {
+    console.warn("AnalyticsEvent query failed:", e.message);
+  }
+
+  // ── RTO stats from DB ──────────────────────────────────────────────────────
+  let rtoRate = "0.0";
+  try {
+    const rtoStats = await db.rtoStats.findUnique({ where: { shop: session.shop } });
+    if (rtoStats) rtoRate = rtoStats.rtoRate.toFixed(1);
+  } catch (e) {
+    console.warn("RtoStats query failed:", e.message);
+  }
 
   return {
     range,
@@ -90,12 +140,9 @@ export const loader = async ({ request }) => {
       cancelRate: orders.length ? ((cancelledOrders.length / orders.length) * 100).toFixed(1) : "0.0",
       fulfillmentRate: orders.length ? ((fulfilledOrders.length / orders.length) * 100).toFixed(1) : "0.0",
       avgOrderValue: orders.length ? (totalRevenue / orders.length).toFixed(2) : "0.00",
-      rtoRate: "11.4",
-      freeshippingBarConversions: 87,
-      upsellConversions: 34,
-      milestoneRewardsRedeemed: 19,
-      prepaidIncentiveConversions: 34,
-      cartAbandonment: "62.3",
+      rtoRate,
+      ...featureStats,
+      cartAbandonment: "0.0", // requires Shopify Plus Abandoned Checkout API
     },
   };
 };
@@ -106,15 +153,15 @@ export default function AnalyticsDashboard() {
   const { stats, revenueTrend, topProducts, range } = useLoaderData();
   const navigate = useNavigate();
 
-  const maxBar = Math.max(...revenueTrend.map(d => d.cod + d.prepaid));
+  const maxBar = Math.max(...revenueTrend.map(d => d.cod + d.prepaid), 1);
 
   const kpis = [
-    { label: "Total Revenue", value: fmt(stats.totalRevenue), delta: "+12.4%", good: true, icon: "💰" },
-    { label: "Total Orders", value: stats.totalOrders, delta: "+8.1%", good: true, icon: "📦" },
-    { label: "Avg Order Value", value: fmt(stats.avgOrderValue), delta: "+3.2%", good: true, icon: "🛒" },
-    { label: "COD Rate", value: `${((stats.codOrders / (stats.totalOrders || 1)) * 100).toFixed(1)}%`, delta: "-2.1%", good: true, icon: "💵" },
-    { label: "RTO Rate", value: `${stats.rtoRate}%`, delta: "-1.8%", good: true, icon: "🔄" },
-    { label: "Cart Abandonment", value: `${stats.cartAbandonment}%`, delta: "-4.2%", good: true, icon: "🛒" },
+    { label: "Total Revenue", value: fmt(stats.totalRevenue), delta: null, icon: "💰" },
+    { label: "Total Orders", value: stats.totalOrders, delta: null, icon: "📦" },
+    { label: "Avg Order Value", value: fmt(stats.avgOrderValue), delta: null, icon: "🛒" },
+    { label: "COD Rate", value: `${((stats.codOrders / (stats.totalOrders || 1)) * 100).toFixed(1)}%`, delta: null, icon: "💵" },
+    { label: "RTO Rate", value: `${stats.rtoRate}%`, delta: null, icon: "🔄" },
+    { label: "Fulfillment Rate", value: `${stats.fulfillmentRate}%`, delta: null, icon: "✅" },
   ];
 
   return (
@@ -155,15 +202,7 @@ export default function AnalyticsDashboard() {
             }}>
               <div>
                 <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: "6px" }}>{card.label}</div>
-                <div style={{ fontSize: "26px", fontWeight: 700, color: "#202223", lineHeight: 1, marginBottom: "8px" }}>{card.value}</div>
-                <span style={{
-                  fontSize: "11px", fontWeight: 600,
-                  color: card.good ? "#008060" : "#d72c0d",
-                  background: card.good ? "#e3f1eb" : "#fbe9e7",
-                  padding: "2px 8px", borderRadius: "99px",
-                }}>
-                  {card.delta} vs last period
-                </span>
+                <div style={{ fontSize: "26px", fontWeight: 700, color: "#202223", lineHeight: 1 }}>{card.value}</div>
               </div>
               <span style={{ fontSize: "28px" }}>{card.icon}</span>
             </div>
@@ -173,39 +212,39 @@ export default function AnalyticsDashboard() {
 
       {/* Revenue chart */}
       <s-section heading="Revenue Trend (Last 7 Days)">
-        <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", height: "180px", padding: "0 8px" }}>
-          {revenueTrend.map(d => {
-            const total = d.cod + d.prepaid;
-            const totalH = (total / maxBar) * 160;
-            const codH = (d.cod / maxBar) * 160;
-            const prepaidH = (d.prepaid / maxBar) * 160;
-            return (
-              <div key={d.day} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                <div style={{ display: "flex", gap: "2px", alignItems: "flex-end", height: "160px" }}>
-                  <div title={`COD: ₹${d.cod.toLocaleString("en-IN")}`} style={{
-                    width: "18px", height: `${codH}px`,
-                    background: "#f4a423", borderRadius: "3px 3px 0 0", transition: "height 0.3s ease",
-                  }} />
-                  <div title={`Prepaid: ₹${d.prepaid.toLocaleString("en-IN")}`} style={{
-                    width: "18px", height: `${prepaidH}px`,
-                    background: "#008060", borderRadius: "3px 3px 0 0", transition: "height 0.3s ease",
-                  }} />
-                </div>
-                <p style={{ margin: 0, fontSize: "11px", color: "#6d7175" }}>{d.day}</p>
+        {revenueTrend.every(d => d.cod === 0 && d.prepaid === 0) ? (
+          <div style={{ padding: "32px", textAlign: "center", color: "#6d7175", fontSize: "13px" }}>
+            No orders in this period yet.
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", height: "180px", padding: "0 8px" }}>
+              {revenueTrend.map(d => {
+                const codH = (d.cod / maxBar) * 160;
+                const prepaidH = (d.prepaid / maxBar) * 160;
+                return (
+                  <div key={d.day} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                    <div style={{ display: "flex", gap: "2px", alignItems: "flex-end", height: "160px" }}>
+                      <div title={`COD: ${fmt(d.cod)}`} style={{ width: "18px", height: `${Math.max(codH, 2)}px`, background: "#f4a423", borderRadius: "3px 3px 0 0", transition: "height 0.3s ease" }} />
+                      <div title={`Prepaid: ${fmt(d.prepaid)}`} style={{ width: "18px", height: `${Math.max(prepaidH, 2)}px`, background: "#008060", borderRadius: "3px 3px 0 0", transition: "height 0.3s ease" }} />
+                    </div>
+                    <p style={{ margin: 0, fontSize: "11px", color: "#6d7175" }}>{d.day}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: "20px", marginTop: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div style={{ width: 12, height: 12, borderRadius: 2, background: "#f4a423" }} />
+                <span style={{ fontSize: "12px", color: "#6d7175" }}>COD Revenue</span>
               </div>
-            );
-          })}
-        </div>
-        <div style={{ display: "flex", gap: "20px", marginTop: "12px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <div style={{ width: 12, height: 12, borderRadius: 2, background: "#f4a423" }} />
-            <span style={{ fontSize: "12px", color: "#6d7175" }}>COD Revenue</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <div style={{ width: 12, height: 12, borderRadius: 2, background: "#008060" }} />
-            <span style={{ fontSize: "12px", color: "#6d7175" }}>Prepaid Revenue</span>
-          </div>
-        </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div style={{ width: 12, height: 12, borderRadius: 2, background: "#008060" }} />
+                <span style={{ fontSize: "12px", color: "#6d7175" }}>Prepaid Revenue</span>
+              </div>
+            </div>
+          </>
+        )}
       </s-section>
 
       {/* COD vs Prepaid split */}
@@ -220,11 +259,7 @@ export default function AnalyticsDashboard() {
               <div style={{ fontSize: "22px", fontWeight: 700, marginBottom: "2px" }}>{item.count}</div>
               <div style={{ fontSize: "13px", color: "#202223", marginBottom: "12px" }}>{fmt(item.revenue)}</div>
               <div style={{ height: "6px", background: "#e1e3e5", borderRadius: "3px" }}>
-                <div style={{
-                  height: "100%",
-                  width: `${(item.count / (stats.totalOrders || 1)) * 100}%`,
-                  background: item.color, borderRadius: "3px",
-                }} />
+                <div style={{ height: "100%", width: `${(item.count / (stats.totalOrders || 1)) * 100}%`, background: item.color, borderRadius: "3px" }} />
               </div>
             </div>
           ))}
@@ -240,10 +275,7 @@ export default function AnalyticsDashboard() {
             { label: "Rewards Redeemed", value: stats.milestoneRewardsRedeemed, unit: "orders", icon: "🎁" },
             { label: "Prepaid Incentive", value: stats.prepaidIncentiveConversions, unit: "conversions", icon: "💳" },
           ].map(f => (
-            <div key={f.label} style={{
-              background: "#f6f6f7", borderRadius: "10px", padding: "16px",
-              border: "1px solid #e1e3e5",
-            }}>
+            <div key={f.label} style={{ background: "#f6f6f7", borderRadius: "10px", padding: "16px", border: "1px solid #e1e3e5" }}>
               <div style={{ fontSize: "24px", marginBottom: "8px" }}>{f.icon}</div>
               <div style={{ fontSize: "22px", fontWeight: 700, marginBottom: "2px" }}>{f.value}</div>
               <div style={{ fontSize: "11px", color: "#6d7175" }}>{f.unit}</div>
@@ -261,11 +293,7 @@ export default function AnalyticsDashboard() {
               <thead>
                 <tr style={{ borderBottom: "1px solid #e1e3e5" }}>
                   {["Product", "Units Sold", "Revenue"].map(h => (
-                    <th key={h} style={{
-                      textAlign: h === "Product" ? "left" : "right",
-                      padding: "10px 12px", fontWeight: 600,
-                      color: "#6d7175", fontSize: "12px",
-                    }}>{h}</th>
+                    <th key={h} style={{ textAlign: h === "Product" ? "left" : "right", padding: "10px 12px", fontWeight: 600, color: "#6d7175", fontSize: "12px" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -282,7 +310,7 @@ export default function AnalyticsDashboard() {
           </div>
         ) : (
           <div style={{ padding: "32px", textAlign: "center", color: "#6d7175", fontSize: "13px" }}>
-            No product data yet. Orders will appear here as they come in.
+            No orders in this period yet.
           </div>
         )}
       </s-section>
@@ -295,10 +323,7 @@ export default function AnalyticsDashboard() {
           { label: "COD Rate", value: `${((stats.codOrders / (stats.totalOrders || 1)) * 100).toFixed(1)}%` },
           { label: "RTO Rate", value: `${stats.rtoRate}%` },
         ].map(s => (
-          <div key={s.label} style={{
-            display: "flex", justifyContent: "space-between",
-            padding: "8px 0", borderBottom: "1px solid #f1f1f1", fontSize: "13px",
-          }}>
+          <div key={s.label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f1f1f1", fontSize: "13px" }}>
             <span style={{ color: "#6d7175" }}>{s.label}</span>
             <span style={{ fontWeight: 600, color: "#202223" }}>{s.value}</span>
           </div>
@@ -306,8 +331,15 @@ export default function AnalyticsDashboard() {
       </s-section>
 
       <s-section slot="aside" heading="💡 Insights">
-        <s-paragraph>Your RTO rate of {stats.rtoRate}% is above the 10% industry benchmark. Enable COD OTP verification.</s-paragraph>
-        <s-paragraph>Free shipping bar has driven {stats.freeshippingBarConversions} conversions this period — keep the threshold active.</s-paragraph>
+        {parseFloat(stats.rtoRate) > 10 && (
+          <s-paragraph>Your RTO rate of {stats.rtoRate}% is above the 10% benchmark. Enable COD OTP verification.</s-paragraph>
+        )}
+        {stats.freeshippingBarConversions > 0 && (
+          <s-paragraph>Free shipping bar drove {stats.freeshippingBarConversions} conversions this period.</s-paragraph>
+        )}
+        {stats.totalOrders === 0 && (
+          <s-paragraph>No orders yet in this period. Data will appear as orders come in.</s-paragraph>
+        )}
       </s-section>
     </s-page>
   );

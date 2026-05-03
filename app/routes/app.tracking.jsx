@@ -1,23 +1,129 @@
 import { useState } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
-import db from "../db.server";
 
 export const loader = async ({ request }) => {
-  await authenticate.admin(request);
-  return null;
+  const { admin } = await authenticate.admin(request);
+
+  let recentOrders = [];
+  try {
+    const res = await admin.graphql(`
+      query getRecentOrders {
+        orders(first: 20, sortKey: CREATED_AT, reverse: true) {
+          edges {
+            node {
+              id
+              name
+              displayFulfillmentStatus
+              fulfillments(first: 1) {
+                trackingInfo(first: 1) {
+                  number
+                  company
+                  url
+                }
+                estimatedDeliveryAt
+              }
+              shippingAddress { firstName lastName }
+              cancelReason
+              tags
+            }
+          }
+        }
+      }
+    `);
+    const data = await res.json();
+    const orders = data?.data?.orders?.edges?.map(e => e.node) ?? [];
+
+    recentOrders = orders.map(o => {
+      const fulfillment = o.fulfillments?.[0];
+      const tracking = fulfillment?.trackingInfo?.[0];
+      const customerName = o.shippingAddress
+        ? `${o.shippingAddress.firstName ?? ""} ${o.shippingAddress.lastName ?? ""}`.trim()
+        : "—";
+
+      // Map Shopify fulfillment status to display status + color
+      const statusMap = {
+        FULFILLED:        { label: "Delivered",        color: "#008060" },
+        IN_TRANSIT:       { label: "In Transit",       color: "#b5731d" },
+        OUT_FOR_DELIVERY: { label: "Out for Delivery", color: "#1a73e8" },
+        ATTEMPTED_DELIVERY: { label: "NDR Pending",   color: "#b5731d" },
+        UNFULFILLED:      { label: "Pending",          color: "#6d7175" },
+        PARTIALLY_FULFILLED: { label: "Partial",       color: "#b5731d" },
+        SCHEDULED:        { label: "Scheduled",        color: "#6d7175" },
+      };
+      const statusInfo = statusMap[o.displayFulfillmentStatus] ?? { label: o.displayFulfillmentStatus, color: "#6d7175" };
+
+      // Check for RTO
+      const isRto = o.cancelReason != null || o.tags?.toLowerCase().includes("rto");
+      if (isRto) {
+        statusInfo.label = "RTO Initiated";
+        statusInfo.color = "#d72c0d";
+      }
+
+      return {
+        id: o.name,
+        customer: customerName || "—",
+        status: statusInfo.label,
+        statusColor: statusInfo.color,
+        carrier: tracking?.company ?? "—",
+        awb: tracking?.number ?? "—",
+        eta: fulfillment?.estimatedDeliveryAt
+          ? new Date(fulfillment.estimatedDeliveryAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+          : "—",
+      };
+    });
+  } catch (e) {
+    console.error("Failed to fetch orders:", e.message);
+  }
+
+  return { recentOrders };
 };
 
 export const action = async ({ request }) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   const formData = await request.formData();
-  const settings = Object.fromEntries(formData);
-  // TODO: Save to DB via Prisma (db.trackingSettings.upsert)
-  return { success: true, settings };
+  const data = Object.fromEntries(formData);
+
+  // Dynamically import db to keep it server-only
+  const db = (await import("../db.server")).default;
+
+  const parsed = {
+    brandedPageEnabled: data.brandedPageEnabled === "true",
+    customDomain: data.customDomain || "",
+    logoUrl: data.logoUrl || "",
+    primaryColor: data.primaryColor || "#5C6AC4",
+    accentColor: data.accentColor || "#47C1BF",
+    showEstimatedDelivery: data.showEstimatedDelivery === "true",
+    showOrderItems: data.showOrderItems === "true",
+    showCarrierInfo: data.showCarrierInfo === "true",
+    notificationsEnabled: data.notificationsEnabled === "true",
+    notifyEmail: data.notifyEmail === "true",
+    notifyWhatsapp: data.notifyWhatsapp === "true",
+    notifySms: data.notifySms === "true",
+    whatsappNumber: data.whatsappNumber || "",
+    emailTemplate: data.emailTemplate || "default",
+    ndrsEnabled: data.ndrsEnabled === "true",
+    ndrAutoReattempt: data.ndrAutoReattempt === "true",
+    ndrMaxAttempts: parseInt(data.ndrMaxAttempts || 3),
+  };
+
+  try {
+    await db.trackingSettings.upsert({
+      where: { shop: session.shop },
+      update: parsed,
+      create: { shop: session.shop, ...parsed },
+    });
+  } catch (e) {
+    console.error("Failed to save tracking settings:", e.message);
+    return { success: false, message: "Database error. Run: npx prisma migrate dev" };
+  }
+
+  return { success: true };
 };
 
 export default function TrackingPage() {
+  const { recentOrders } = useLoaderData();
   const fetcher = useFetcher();
   const isSaving = fetcher.state === "submitting";
 
@@ -47,14 +153,7 @@ export default function TrackingPage() {
   // Active tab
   const [activeTab, setActiveTab] = useState("branded");
 
-  // Sample live orders
-  const recentOrders = [
-    { id: "#1042", customer: "Priya Sharma", status: "Out for Delivery", statusColor: "#1a73e8", carrier: "Delhivery", awb: "DL4829301", eta: "Today" },
-    { id: "#1041", customer: "Rohit Mehta", status: "In Transit", statusColor: "#b5731d", carrier: "BlueDart", awb: "BD9921043", eta: "Tomorrow" },
-    { id: "#1040", customer: "Anjali Verma", status: "RTO Initiated", statusColor: "#d72c0d", carrier: "Xpressbees", awb: "XB3310987", eta: "—" },
-    { id: "#1039", customer: "Suresh Kumar", status: "Delivered", statusColor: "#008060", carrier: "Shadowfax", awb: "SF8820011", eta: "Delivered" },
-    { id: "#1038", customer: "Meera Joshi", status: "NDR Pending", statusColor: "#b5731d", carrier: "Ecom Express", awb: "EC7761209", eta: "Rescheduled" },
-  ];
+
 
   const handleSave = () => {
     fetcher.submit(
