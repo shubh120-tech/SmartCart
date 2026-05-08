@@ -1,11 +1,11 @@
 -- CreateTable
 CREATE TABLE "Session" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "shop" TEXT NOT NULL,
     "state" TEXT NOT NULL,
     "isOnline" BOOLEAN NOT NULL DEFAULT false,
     "scope" TEXT,
-    "expires" TIMESTAMP(3),
+    "expires" DATETIME,
     "accessToken" TEXT NOT NULL,
     "userId" BIGINT,
     "firstName" TEXT,
@@ -16,19 +16,17 @@ CREATE TABLE "Session" (
     "collaborator" BOOLEAN DEFAULT false,
     "emailVerified" BOOLEAN DEFAULT false,
     "refreshToken" TEXT,
-    "refreshTokenExpires" TIMESTAMP(3),
-
-    CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
+    "refreshTokenExpires" DATETIME
 );
 
 -- CreateTable
 CREATE TABLE "cod_settings" (
-    "id" SERIAL NOT NULL,
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "shop" TEXT NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT true,
-    "minOrderValue" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "maxOrderValue" DOUBLE PRECISION NOT NULL DEFAULT 10000,
-    "extraFee" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "minOrderValue" REAL NOT NULL DEFAULT 0,
+    "maxOrderValue" REAL NOT NULL DEFAULT 10000,
+    "extraFee" REAL NOT NULL DEFAULT 0,
     "extraFeeType" TEXT NOT NULL DEFAULT 'flat',
     "blockedPincodes" TEXT NOT NULL DEFAULT '',
     "blockedStates" TEXT NOT NULL DEFAULT '',
@@ -36,34 +34,30 @@ CREATE TABLE "cod_settings" (
     "autoVerifyReturningCustomers" BOOLEAN NOT NULL DEFAULT true,
     "rtoProtection" BOOLEAN NOT NULL DEFAULT true,
     "rtoRiskThreshold" TEXT NOT NULL DEFAULT 'medium',
-    "prepaidDiscount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "prepaidDiscount" REAL NOT NULL DEFAULT 0,
     "prepaidDiscountType" TEXT NOT NULL DEFAULT 'flat',
     "partialCodEnabled" BOOLEAN NOT NULL DEFAULT false,
-    "partialCodMinPrepaid" DOUBLE PRECISION NOT NULL DEFAULT 20,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "cod_settings_pkey" PRIMARY KEY ("id")
+    "partialCodMinPrepaid" REAL NOT NULL DEFAULT 20,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "rto_stats" (
-    "id" SERIAL NOT NULL,
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "shop" TEXT NOT NULL,
     "totalOrders" INTEGER NOT NULL DEFAULT 0,
     "codOrders" INTEGER NOT NULL DEFAULT 0,
     "rtoCount" INTEGER NOT NULL DEFAULT 0,
-    "rtoRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "rtoRate" REAL NOT NULL DEFAULT 0,
     "savedByVerification" INTEGER NOT NULL DEFAULT 0,
     "prepaidConversions" INTEGER NOT NULL DEFAULT 0,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "rto_stats_pkey" PRIMARY KEY ("id")
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "tracking_settings" (
-    "id" SERIAL NOT NULL,
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "shop" TEXT NOT NULL,
     "brandedPageEnabled" BOOLEAN NOT NULL DEFAULT true,
     "customDomain" TEXT NOT NULL DEFAULT '',
@@ -82,18 +76,16 @@ CREATE TABLE "tracking_settings" (
     "ndrsEnabled" BOOLEAN NOT NULL DEFAULT true,
     "ndrAutoReattempt" BOOLEAN NOT NULL DEFAULT true,
     "ndrMaxAttempts" INTEGER NOT NULL DEFAULT 3,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "tracking_settings_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "smart_cart_settings" (
-    "id" SERIAL NOT NULL,
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "shop" TEXT NOT NULL,
     "freeShippingEnabled" BOOLEAN NOT NULL DEFAULT true,
-    "freeShippingThreshold" DOUBLE PRECISION NOT NULL DEFAULT 499,
+    "freeShippingThreshold" REAL NOT NULL DEFAULT 499,
     "freeShippingMessage" TEXT NOT NULL DEFAULT 'Add {amount} more for FREE shipping 🚚',
     "freeShippingSuccessMessage" TEXT NOT NULL DEFAULT '🎉 You''ve unlocked FREE shipping!',
     "milestonesEnabled" BOOLEAN NOT NULL DEFAULT true,
@@ -101,62 +93,54 @@ CREATE TABLE "smart_cart_settings" (
     "upsellEnabled" BOOLEAN NOT NULL DEFAULT false,
     "upsellProductVariantId" TEXT NOT NULL DEFAULT '',
     "upsellProductTitle" TEXT NOT NULL DEFAULT '',
-    "upsellProductPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "upsellProductPrice" REAL NOT NULL DEFAULT 0,
     "upsellProductImage" TEXT NOT NULL DEFAULT '',
     "upsellTitle" TEXT NOT NULL DEFAULT 'Complete your order',
     "upsellBadgeText" TEXT NOT NULL DEFAULT 'Frequently bought together',
     "prepaidNudgeEnabled" BOOLEAN NOT NULL DEFAULT true,
-    "prepaidDiscount" DOUBLE PRECISION NOT NULL DEFAULT 50,
+    "prepaidDiscount" REAL NOT NULL DEFAULT 50,
     "prepaidDiscountType" TEXT NOT NULL DEFAULT 'flat',
     "trustBadgesEnabled" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "smart_cart_settings_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "shipping_settings" (
-    "id" SERIAL NOT NULL,
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "shop" TEXT NOT NULL,
     "defaultWeight" INTEGER NOT NULL DEFAULT 500,
     "autoSelectCourier" BOOLEAN NOT NULL DEFAULT true,
     "showRatesInCart" BOOLEAN NOT NULL DEFAULT true,
-    "codExtraCharge" DOUBLE PRECISION NOT NULL DEFAULT 30,
+    "codExtraCharge" REAL NOT NULL DEFAULT 30,
     "couriers" TEXT NOT NULL DEFAULT '[]',
     "zones" TEXT NOT NULL DEFAULT '[]',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "shipping_settings_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "app_settings" (
-    "id" SERIAL NOT NULL,
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "shop" TEXT NOT NULL,
     "storeName" TEXT NOT NULL DEFAULT '',
     "currency" TEXT NOT NULL DEFAULT 'INR',
     "timezone" TEXT NOT NULL DEFAULT 'Asia/Kolkata',
     "plan" TEXT NOT NULL DEFAULT 'free',
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "installedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "app_settings_pkey" PRIMARY KEY ("id")
+    "installedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "analytics_events" (
-    "id" SERIAL NOT NULL,
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "shop" TEXT NOT NULL,
     "event" TEXT NOT NULL,
     "orderId" TEXT,
-    "value" DOUBLE PRECISION,
+    "value" REAL,
     "metadata" TEXT NOT NULL DEFAULT '{}',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "analytics_events_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateIndex

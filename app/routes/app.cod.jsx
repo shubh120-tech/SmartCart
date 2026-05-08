@@ -94,28 +94,28 @@ export default function CodManagement() {
   const fetcher = useFetcher();
   const isSaving = fetcher.state === "submitting";
 
-  // COD General
-  const [enabled, setEnabled] = useState(true);
-  const [minOrderValue, setMinOrderValue] = useState(0);
-  const [maxOrderValue, setMaxOrderValue] = useState(10000);
-  const [extraFee, setExtraFee] = useState(0);
-  const [extraFeeType, setExtraFeeType] = useState("flat");
-  const [blockedPincodes, setBlockedPincodes] = useState("");
-  const [blockedStates, setBlockedStates] = useState("");
+  // COD General — initialized from DB via loader
+  const [enabled, setEnabled] = useState(loaderSettings?.enabled ?? true);
+  const [minOrderValue, setMinOrderValue] = useState(loaderSettings?.minOrderValue ?? 0);
+  const [maxOrderValue, setMaxOrderValue] = useState(loaderSettings?.maxOrderValue ?? 10000);
+  const [extraFee, setExtraFee] = useState(loaderSettings?.extraFee ?? 0);
+  const [extraFeeType, setExtraFeeType] = useState(loaderSettings?.extraFeeType ?? "flat");
+  const [blockedPincodes, setBlockedPincodes] = useState(loaderSettings?.blockedPincodes ?? "");
+  const [blockedStates, setBlockedStates] = useState(loaderSettings?.blockedStates ?? "");
 
-  // RTO
-  const [rtoProtection, setRtoProtection] = useState(true);
-  const [rtoRiskThreshold, setRtoRiskThreshold] = useState("medium");
-  const [requireOtp, setRequireOtp] = useState(false);
-  const [autoVerify, setAutoVerify] = useState(true);
+  // RTO — initialized from DB
+  const [rtoProtection, setRtoProtection] = useState(loaderSettings?.rtoProtection ?? true);
+  const [rtoRiskThreshold, setRtoRiskThreshold] = useState(loaderSettings?.rtoRiskThreshold ?? "medium");
+  const [requireOtp, setRequireOtp] = useState(loaderSettings?.requireOtp ?? false);
+  const [autoVerify, setAutoVerify] = useState(loaderSettings?.autoVerifyReturningCustomers ?? true);
 
-  // Prepaid incentive
-  const [prepaidDiscount, setPrepaidDiscount] = useState(0);
-  const [prepaidDiscountType, setPrepaidDiscountType] = useState("flat");
+  // Prepaid incentive — initialized from DB
+  const [prepaidDiscount, setPrepaidDiscount] = useState(loaderSettings?.prepaidDiscount ?? 0);
+  const [prepaidDiscountType, setPrepaidDiscountType] = useState(loaderSettings?.prepaidDiscountType ?? "flat");
 
-  // Partial COD
-  const [partialCodEnabled, setPartialCodEnabled] = useState(false);
-  const [partialCodMinPrepaid, setPartialCodMinPrepaid] = useState(20);
+  // Partial COD — initialized from DB
+  const [partialCodEnabled, setPartialCodEnabled] = useState(loaderSettings?.partialCodEnabled ?? false);
+  const [partialCodMinPrepaid, setPartialCodMinPrepaid] = useState(loaderSettings?.partialCodMinPrepaid ?? 20);
 
   const rtoRateColor = rtoStats.rtoRate < 10 ? "#008060" : rtoStats.rtoRate < 20 ? "#b5731d" : "#d72c0d";
 

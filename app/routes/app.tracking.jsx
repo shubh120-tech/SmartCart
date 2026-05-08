@@ -4,7 +4,16 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  
+  // Load tracking settings from DB
+  let trackingSettings = null;
+  try {
+    const db = (await import("../db.server")).default;
+    trackingSettings = await db.trackingSettings.findUnique({ where: { shop: session.shop } });
+  } catch (e) {
+    console.warn("TrackingSettings not found:", e.message);
+  }
 
   let recentOrders = [];
   try {
@@ -77,7 +86,7 @@ export const loader = async ({ request }) => {
     console.error("Failed to fetch orders:", e.message);
   }
 
-  return { recentOrders };
+  return { recentOrders, trackingSettings };
 };
 
 export const action = async ({ request }) => {
@@ -123,32 +132,32 @@ export const action = async ({ request }) => {
 };
 
 export default function TrackingPage() {
-  const { recentOrders } = useLoaderData();
+  const { recentOrders, trackingSettings: ts } = useLoaderData();
   const fetcher = useFetcher();
   const isSaving = fetcher.state === "submitting";
 
-  // Branded page
-  const [brandedPageEnabled, setBrandedPageEnabled] = useState(true);
-  const [customDomain, setCustomDomain] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
-  const [primaryColor, setPrimaryColor] = useState("#5C6AC4");
-  const [accentColor, setAccentColor] = useState("#47C1BF");
-  const [showEstimatedDelivery, setShowEstimatedDelivery] = useState(true);
-  const [showOrderItems, setShowOrderItems] = useState(true);
-  const [showCarrierInfo, setShowCarrierInfo] = useState(true);
+  // Branded page — initialized from DB
+  const [brandedPageEnabled, setBrandedPageEnabled] = useState(ts?.brandedPageEnabled ?? true);
+  const [customDomain, setCustomDomain] = useState(ts?.customDomain ?? "");
+  const [logoUrl, setLogoUrl] = useState(ts?.logoUrl ?? "");
+  const [primaryColor, setPrimaryColor] = useState(ts?.primaryColor ?? "#5C6AC4");
+  const [accentColor, setAccentColor] = useState(ts?.accentColor ?? "#47C1BF");
+  const [showEstimatedDelivery, setShowEstimatedDelivery] = useState(ts?.showEstimatedDelivery ?? true);
+  const [showOrderItems, setShowOrderItems] = useState(ts?.showOrderItems ?? true);
+  const [showCarrierInfo, setShowCarrierInfo] = useState(ts?.showCarrierInfo ?? true);
 
-  // Notifications
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [notifyEmail, setNotifyEmail] = useState(true);
-  const [notifyWhatsapp, setNotifyWhatsapp] = useState(false);
-  const [notifySms, setNotifySms] = useState(false);
-  const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [emailTemplate, setEmailTemplate] = useState("default");
+  // Notifications — initialized from DB
+  const [notificationsEnabled, setNotificationsEnabled] = useState(ts?.notificationsEnabled ?? true);
+  const [notifyEmail, setNotifyEmail] = useState(ts?.notifyEmail ?? true);
+  const [notifyWhatsapp, setNotifyWhatsapp] = useState(ts?.notifyWhatsapp ?? false);
+  const [notifySms, setNotifySms] = useState(ts?.notifySms ?? false);
+  const [whatsappNumber, setWhatsappNumber] = useState(ts?.whatsappNumber ?? "");
+  const [emailTemplate, setEmailTemplate] = useState(ts?.emailTemplate ?? "default");
 
-  // NDR
-  const [ndrsEnabled, setNdrsEnabled] = useState(true);
-  const [ndrAutoReattempt, setNdrAutoReattempt] = useState(true);
-  const [ndrMaxAttempts, setNdrMaxAttempts] = useState(3);
+  // NDR — initialized from DB
+  const [ndrsEnabled, setNdrsEnabled] = useState(ts?.ndrsEnabled ?? true);
+  const [ndrAutoReattempt, setNdrAutoReattempt] = useState(ts?.ndrAutoReattempt ?? true);
+  const [ndrMaxAttempts, setNdrMaxAttempts] = useState(ts?.ndrMaxAttempts ?? 3);
 
   // Active tab
   const [activeTab, setActiveTab] = useState("branded");

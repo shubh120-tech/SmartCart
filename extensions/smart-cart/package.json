@@ -1,11 +1,10 @@
 {
-  "name": "smart-cart",
-  "private": true,
+  "name": "smart-cart-widget",
   "version": "1.0.0",
-  "license": "UNLICENSED",
+  "private": true,
   "dependencies": {
-    "preact": "^10.10.x",
-    "@preact/signals": "^2.3.x",
+    "preact": "^10.10.0",
+    "@preact/signals": "^2.3.0",
     "@shopify/ui-extensions": "2026.4.x"
   }
 }

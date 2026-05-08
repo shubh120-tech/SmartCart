@@ -1,17 +1,14 @@
-# extensions/smart-cart-widget/shopify.extension.toml
-# https://shopify.dev/docs/api/checkout-ui-extensions/latest/configuration
-
 api_version = "2026-04"
+uid = "b7b1958f-198b-c735-9d7c-124e7828c25ac2770a5b"
 
 [[extensions]]
 name = "smart-cart"
 handle = "smart-cart"
 type = "ui_extension"
-uid = "b7b1958f-198b-c735-9d7c-124e7828c25ac2770a5b"
 
 [[extensions.targeting]]
 module = "./src/Checkout.jsx"
-target = "purchase.checkout.block.render"
+target = "purchase.thank-you.block.render"
 
 [extensions.capabilities]
 api_access = true
@@ -20,9 +17,6 @@ api_access = true
 namespace = "$app"
 key = "requestedFreeGift"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SETTINGS — configurable by merchant from Shopify admin
-# ─────────────────────────────────────────────────────────────────────────────
 [extensions.settings]
 
 [[extensions.settings.fields]]
@@ -41,7 +35,7 @@ description = "Cart value needed to unlock free shipping (e.g. 499)"
 key = "freeShippingMessage"
 type = "single_line_text_field"
 name = "Free shipping message"
-description = "Use {amount} as placeholder. e.g. Add {amount} more for FREE shipping 🚚"
+description = "Use {amount} as placeholder"
 
 [[extensions.settings.fields]]
 key = "freeShippingSuccessMessage"
@@ -59,7 +53,7 @@ description = "Show reward unlocks as customer adds items to cart"
 key = "milestones"
 type = "single_line_text_field"
 name = "Milestones (JSON)"
-description = "JSON array: [{\"threshold\":500,\"reward\":\"Free Gift\",\"description\":\"Mystery gift\"}]"
+description = "JSON array of milestone objects"
 
 [[extensions.settings.fields]]
 key = "prepaidNudgeEnabled"
@@ -71,7 +65,7 @@ description = "Show a banner encouraging customers to switch from COD to prepaid
 key = "prepaidDiscount"
 type = "number_decimal"
 name = "Prepaid discount amount"
-description = "Discount offered for switching to prepaid (e.g. 50)"
+description = "Discount offered for switching to prepaid"
 
 [[extensions.settings.fields]]
 key = "prepaidDiscountType"
